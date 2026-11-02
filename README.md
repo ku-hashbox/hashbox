@@ -11,7 +11,9 @@ apps/
   web/        React + Vite → Cloudflare Pages
   api/        Cloudflare Workers + Hono, D1, R2
 packages/
-  shared/     프론트·백엔드 공용 상수, 타입, 유틸 (암호화 모듈 포함 예정)
+  shared/     프론트·백엔드 공용 상수, 타입, 암호화 모듈, .env 파서
+docs/
+  STRUCTURE.md  폴더별 내용과 담당
 ```
 
 ## 시작하기

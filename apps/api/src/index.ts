@@ -1,7 +1,10 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import type { ErrorResponse } from '@hashbox/shared';
 import type { Env } from './env';
+import { fail } from './lib/errors';
+import { shares } from './routes/shares';
+import { manage } from './routes/manage';
+import { runCleanup } from './cron/cleanup';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -23,25 +26,20 @@ app.use('/api/*', async (c, next) => {
 });
 
 app.get('/api/health', (c) => c.json({ ok: true }));
+app.route('/api/shares', shares);
+app.route('/api/manage', manage);
 
-// TODO(BE, 2주차): POST /api/shares, PUT /api/shares/:id/blob, GET /api/shares/:id, POST /api/shares/:id/open
-// TODO(BE, 3주차): GET·DELETE /api/manage
-
-app.notFound((c) =>
-  c.json<ErrorResponse>({ error: { code: 'NOT_FOUND', message: '없는 경로예요.' } }, 404),
-);
+app.notFound((c) => fail(c, 404, 'NOT_FOUND', '없는 경로예요.'));
 
 app.onError((err, c) => {
   // 요청 본문·토큰은 절대 로그에 남기지 않는다
   console.error('unhandled error', err.name);
-  return c.json<ErrorResponse>(
-    { error: { code: 'INTERNAL', message: '서버 오류가 발생했어요.' } },
-    500,
-  );
+  return fail(c, 500, 'INTERNAL', '서버 오류가 발생했어요.');
 });
 
 export default {
   fetch: app.fetch,
-  // TODO(BE, 3주차): 만료 정리 (개발 기획서 7-1)
-  async scheduled(_event: ScheduledController, _env: Env, _ctx: ExecutionContext) {},
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(runCleanup(env));
+  },
 } satisfies ExportedHandler<Env>;
