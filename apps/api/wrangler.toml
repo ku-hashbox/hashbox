@@ -1,0 +1,22 @@
+name = "hashbox-api"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+# 10분마다 만료 정리
+[triggers]
+crons = ["*/10 * * * *"]
+
+[vars]
+# 프론트 주소. CORS 허용 출처로 사용
+WEB_ORIGIN = "http://localhost:5173"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "hashbox-db"
+# `wrangler d1 create hashbox-db` 실행 후 나오는 id로 교체 (로컬 개발은 이 값 그대로도 동작)
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "BLOBS"
+bucket_name = "hashbox-blobs"
