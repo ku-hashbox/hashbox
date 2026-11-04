@@ -15,5 +15,5 @@ export function fail(
 
 /** 구현 전 엔드포인트용 */
 export function notImplemented(c: Context) {
-  return c.json({ error: { code: 'NOT_IMPLEMENTED', message: '아직 구현되지 않았어요.' } }, 501);
+  return fail(c, 501, 'NOT_IMPLEMENTED', '아직 구현되지 않았어요.');
 }
