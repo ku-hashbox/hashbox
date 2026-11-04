@@ -11,9 +11,10 @@ export const SELECT_BY_MANAGE = `SELECT * FROM shares WHERE manage_hash = ?1`;
 
 export const MARK_READY = `
 UPDATE shares SET status = 'ready', upload_hash = NULL
-WHERE id = ?1 AND status = 'pending' AND upload_hash = ?2`;
+WHERE id = ?1 AND status = 'pending' AND upload_hash = ?2
+  AND expires_at > ?3 AND created_at > ?4`;
 
-/** 원자적 차감. 바뀐 행이 1개면 성공 (?1 id, ?2 now, ?3 authHash 또는 NULL) */
+/** 원자적 차감. 갱신된 행을 반환 (?1 id, ?2 now, ?3 authHash 또는 NULL) */
 export const OPEN_SHARE = `
 UPDATE shares
 SET views_left      = views_left - 1,
@@ -24,7 +25,8 @@ WHERE id = ?1
   AND status = 'ready'
   AND views_left > 0
   AND expires_at > ?2
-  AND (has_password = 0 OR auth_hash = ?3)`;
+  AND (has_password = 0 OR auth_hash = ?3)
+RETURNING status, views_left`;
 
 export const ADD_FAILED_ATTEMPT = `
 UPDATE shares
@@ -42,7 +44,13 @@ SELECT id FROM shares
 WHERE (status = 'ready' AND expires_at <= ?1)
    OR (status = 'pending' AND (expires_at <= ?1 OR created_at <= ?2))`;
 
-export const MARK_EXPIRED = `UPDATE shares SET status = 'expired' WHERE id = ?1`;
+export const MARK_EXPIRED = `
+UPDATE shares SET status = 'expired', upload_hash = NULL
+WHERE id = ?1 AND (
+  (status = 'ready' AND expires_at <= ?2)
+  OR (status = 'pending' AND (expires_at <= ?2 OR created_at <= ?3))
+)
+RETURNING *`;
 
 /** Cron: 톰스톤 보관 기간이 지난 행 삭제 (?1 기준 시각) */
 export const DELETE_OLD_ROWS = `
