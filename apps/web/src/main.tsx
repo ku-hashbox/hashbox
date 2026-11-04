@@ -1,18 +1,13 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
-import SendPage from './pages/SendPage';
-import ReceivePage from './pages/ReceivePage';
-import ManagePage from './pages/ManagePage';
+import { BrowserRouter } from 'react-router-dom';
+import App from './app/App';
+import './app/global.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<SendPage />} />
-        <Route path="/s/:id" element={<ReceivePage />} />
-        <Route path="/m" element={<ManagePage />} />
-      </Routes>
+      <App />
     </BrowserRouter>
   </StrictMode>,
 );

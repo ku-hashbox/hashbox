@@ -1,0 +1,18 @@
+/* 전역 스타일·디자인 토큰 (FE2). 외부 폰트·CDN은 CSP 때문에 쓰지 않는다 */
+:root {
+  font-family:
+    system-ui,
+    -apple-system,
+    'Apple SD Gothic Neo',
+    'Malgun Gothic',
+    sans-serif;
+  line-height: 1.6;
+}
+body {
+  margin: 0;
+}
+.layout {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
