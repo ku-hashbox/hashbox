@@ -8,15 +8,27 @@ crons = ["*/10 * * * *"]
 
 [vars]
 # 프론트 주소. CORS 허용 출처로 사용
-WEB_ORIGIN = "http://localhost:5173"
+WEB_ORIGIN = "https://hashbox-web.pages.dev"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "hashbox-db"
 # `wrangler d1 create hashbox-db` 실행 후 나오는 id로 교체 (로컬 개발은 이 값 그대로도 동작)
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "7a6823be-faca-40be-b8a0-f18df5df0f5f"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
 binding = "BLOBS"
 bucket_name = "hashbox-blobs"
+
+[env.preview]
+name = "hashbox-api-preview"
+
+[env.preview.vars]
+WEB_ORIGIN = "https://dev.hashbox-web.pages.dev"
+
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "hashbox-db-preview"
+database_id = "1b086033-7bd7-4086-8685-4a76312fa429"
+migrations_dir = "migrations"  
