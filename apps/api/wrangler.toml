@@ -14,7 +14,7 @@ WEB_ORIGIN = "http://localhost:5173"
 binding = "DB"
 database_name = "hashbox-db"
 # `wrangler d1 create hashbox-db` 실행 후 나오는 id로 교체 (로컬 개발은 이 값 그대로도 동작)
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "7a6823be-faca-40be-b8a0-f18df5df0f5f"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
