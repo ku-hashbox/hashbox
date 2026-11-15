@@ -17,17 +17,41 @@ export class ApiError extends Error {
   }
 }
 
+async function toApiError(res: Response): Promise<ApiError> {
+  let body: ErrorResponse | null = null;
+  try {
+    body = (await res.json()) as ErrorResponse;
+  } catch {
+    /* no JSON body */
+  }
+  return new ApiError(res.status, body);
+}
+
 export async function health(): Promise<boolean> {
   const res = await fetch(`${API_BASE}/api/health`);
   return res.ok;
 }
 
 export async function createShare(req: CreateShareRequest): Promise<CreateShareResponse> {
-  throw new Error('TODO(FE1): createShare');
+  const res = await fetch(`${API_BASE}/api/shares`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  });
+  if (!res.ok) throw await toApiError(res);
+  return (await res.json()) as CreateShareResponse;
 }
 
 export async function uploadBlob(id: string, uploadToken: string, blob: Uint8Array): Promise<void> {
-  throw new Error('TODO(FE1): uploadBlob');
+  const res = await fetch(`${API_BASE}/api/shares/${id}/blob`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/octet-stream',
+      Authorization: `Bearer ${uploadToken}`,
+    },
+    body: blob as BodyInit,
+  });
+  if (!res.ok) throw await toApiError(res);
 }
 
 export async function getShare(id: string): Promise<ShareMetaResponse> {
@@ -40,9 +64,17 @@ export async function openShare(id: string, authToken?: string): Promise<Uint8Ar
 }
 
 export async function getManage(manageToken: string): Promise<ManageResponse> {
-  throw new Error('TODO(FE1): getManage');
+  const res = await fetch(`${API_BASE}/api/manage`, {
+    headers: { Authorization: `Bearer ${manageToken}` },
+  });
+  if (!res.ok) throw await toApiError(res);
+  return (await res.json()) as ManageResponse;
 }
 
 export async function revokeShare(manageToken: string): Promise<void> {
-  throw new Error('TODO(FE1): revokeShare');
+  const res = await fetch(`${API_BASE}/api/manage`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${manageToken}` },
+  });
+  if (!res.ok) throw await toApiError(res);
 }
