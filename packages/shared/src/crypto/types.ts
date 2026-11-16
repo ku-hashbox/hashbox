@@ -37,10 +37,3 @@ export interface DecryptResult {
   header: PlainHeader;
   content: Uint8Array;
 }
-
-export class DecryptError extends Error {
-  constructor(message = '복호화에 실패했어요. 링크나 비밀번호가 맞는지 확인하세요.') {
-    super(message);
-    this.name = 'DecryptError';
-  }
-}
