@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ManageResponse, ShareStatus } from '@hashbox/shared';
-import { ApiError, getManage, revokeShare } from '../../lib/api';
+import { ApiError, deleteManage, getManage } from '../../lib/api';
 import { initialFragment } from '../../lib/fragment';
 import { formatRemaining } from '../../lib/format';
 import Button from '../../components/Button';
@@ -66,7 +66,7 @@ export default function ManagePage() {
     setRevoking(true);
     setRevokeError(null);
     try {
-      await revokeShare(token);
+      await deleteManage(token);
       setConfirming(false);
       await load();
     } catch {
@@ -143,12 +143,16 @@ export default function ManagePage() {
         <div>
           <dt>열람</dt>
           <dd>
-            {opened} / {data.maxViews}회
+            {opened} / {data.maxViews}회 (남은 횟수 {data.viewsLeft}회)
           </dd>
         </div>
         <div>
           <dt>처음 열린 시각</dt>
           <dd>{data.firstOpenedAt ? fmtTime(data.firstOpenedAt) : '아직 안 열림'}</dd>
+        </div>
+        <div>
+          <dt>마지막으로 열린 시각</dt>
+          <dd>{data.lastOpenedAt ? fmtTime(data.lastOpenedAt) : '아직 안 열림'}</dd>
         </div>
         <div>
           <dt>만료</dt>

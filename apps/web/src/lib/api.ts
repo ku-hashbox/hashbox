@@ -1,6 +1,7 @@
 import type {
   CreateShareRequest,
   CreateShareResponse,
+  ErrorCode,
   ErrorResponse,
   ManageResponse,
   ShareMetaResponse,
@@ -9,11 +10,19 @@ import type {
 const API_BASE = import.meta.env.VITE_API_BASE ?? '';
 
 export class ApiError extends Error {
+  /** 서버가 준 오류 코드. JSON 본문이 없으면 null */
+  readonly code: ErrorCode | null;
+  /** WRONG_PASSWORD일 때 남은 시도 횟수 */
+  readonly attemptsLeft: number | undefined;
+
   constructor(
     public status: number,
     public body: ErrorResponse | null,
   ) {
     super(body?.error.message ?? `API ${status}`);
+    this.name = 'ApiError';
+    this.code = body?.error.code ?? null;
+    this.attemptsLeft = body?.error.attemptsLeft;
   }
 }
 
@@ -71,7 +80,7 @@ export async function getManage(manageToken: string): Promise<ManageResponse> {
   return (await res.json()) as ManageResponse;
 }
 
-export async function revokeShare(manageToken: string): Promise<void> {
+export async function deleteManage(manageToken: string): Promise<void> {
   const res = await fetch(`${API_BASE}/api/manage`, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${manageToken}` },

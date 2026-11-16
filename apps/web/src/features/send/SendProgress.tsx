@@ -1,8 +1,21 @@
-import type { SendStatus } from './useSend';
+import type { SendPhase, SendStatus } from './useSend';
 import Button from '../../components/Button';
 import Notice from '../../components/Notice';
 
-const STEPS = ['브라우저에서 암호화', '상자 등록', '암호문 올리는 중'];
+type StepPhase = Extract<SendPhase, 'encrypting' | 'registering' | 'uploading'>;
+
+interface Step {
+  phase: StepPhase;
+  label: string;
+}
+
+const KEY_STEP: Step = { phase: 'encrypting', label: '비밀번호로 열쇠 만드는 중' };
+const STEPS: Step[] = [
+  { phase: 'encrypting', label: '브라우저에서 암호화' },
+  { phase: 'registering', label: '상자 등록' },
+  { phase: 'uploading', label: '암호문 올리는 중' },
+];
+const ORDER: StepPhase[] = ['encrypting', 'registering', 'uploading'];
 
 /** 보내는 중·실패 화면 (FE1, screen 4) */
 export default function SendProgress(props: {
@@ -13,50 +26,38 @@ export default function SendProgress(props: {
 }) {
   const { status } = props;
   const isError = status.phase === 'error';
-  const failedIdx = status.canRetryUpload ? 2 : 0;
-  const activeIdx =
-    status.phase === 'encrypting'
-      ? 0
-      : status.phase === 'registering'
-        ? 1
-        : status.phase === 'uploading'
-          ? 2
-          : status.phase === 'done'
-            ? 3
-            : failedIdx;
+  // 비밀번호 열쇠 만들기와 암호화는 encryptPayload 한 번에 일어나므로 같은 단계로 묶어 표시한다
+  const steps = props.hasPassword ? [KEY_STEP, ...STEPS] : STEPS;
+  const at = isError ? (status.failedPhase ?? 'encrypting') : status.phase;
+  const atIdx = at === 'done' ? ORDER.length : ORDER.indexOf(at as StepPhase);
 
-  function stepState(i: number): string {
-    if (isError) return i < failedIdx ? '완료' : i === failedIdx ? '실패' : '대기';
-    if (status.phase === 'done' || i < activeIdx) return '완료';
-    if (i === activeIdx) return i === 2 ? '올리는 중' : '진행 중';
-    return '대기';
+  function stepState(step: Step): string {
+    const i = ORDER.indexOf(step.phase);
+    if (i < atIdx) return '완료';
+    if (i > atIdx) return '대기';
+    if (isError) return '실패';
+    return step.phase === 'uploading' ? '올리는 중' : '진행 중';
   }
 
   return (
-    <section className="card send">
+    <section className="card send" aria-busy={!isError}>
       <p className="intro">
         내용은 이 브라우저에서 잠긴 뒤 올라가요. 서버는 열쇠를 모르고, 링크는 정해진 횟수만 열려요.
       </p>
 
-      <div className="field">
-        <div className="disabled-box">입력한 내용 (수정 불가)</div>
-        <p className="hint left">만료·열람 횟수·비밀번호 옵션 (보내는 동안 모두 비활성)</p>
-      </div>
-
       <ol className="steps">
-        {STEPS.map((label, i) => (
-          <li className="step" key={label} data-state={stepState(i)}>
+        {steps.map((step, i) => (
+          <li className="step" key={step.label} data-state={stepState(step)}>
             <span>
-              {i + 1}. {label}
+              {i + 1}. {step.label}
             </span>
-            <small>{stepState(i)}</small>
+            <small>{stepState(step)}</small>
           </li>
         ))}
       </ol>
-      {props.hasPassword && (
+      {props.hasPassword && status.phase === 'encrypting' && (
         <p className="hint left">
-          비밀번호를 걸면 맨 앞에 "비밀번호로 열쇠를 만드는 중" 단계가 추가돼요 (휴대폰은 좀 더
-          걸려요).
+          열쇠를 만드는 데 1초쯤 걸려요. 휴대폰에서는 좀 더 걸릴 수 있어요.
         </p>
       )}
 
