@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { randomBytes } from '../base64url';
-import { MAX_TEXT_BYTES, PBKDF2_ITERATIONS } from '../constants';
+import { MAX_TEXT_BYTES, PBKDF2_ITERATIONS, maxBlobBytes } from '../constants';
 import { aesDecrypt, aesEncrypt } from './aes';
 import { DecryptError, InvalidInputError } from './errors';
 import { BLOB_VERSION, IV_BYTES, decodePlain, encodePlain, packBlob, unpackBlob } from './format';
@@ -154,6 +154,13 @@ describe('encryptPayload / decryptPayload (비밀번호 없음)', () => {
     const { blob, linkKey } = await encryptPayload(textHeader, enc.encode('hi'));
     await expect(decryptPayload(blob, linkKey.slice(0, 30))).rejects.toThrow(InvalidInputError);
     expect(() => parseLinkKey('abc+def')).toThrow(InvalidInputError);
+  });
+
+  it('최대 크기 내용 + 최대 헤더로 만든 blob은 maxBlobBytes와 정확히 같다', async () => {
+    const header: PlainHeader = { v: 1, kind: 'text' };
+    const headerLen = enc.encode(JSON.stringify(header)).length;
+    const { blob } = await encryptPayload(header, new Uint8Array(MAX_TEXT_BYTES));
+    expect(blob.length).toBe(maxBlobBytes('text') - (1024 - headerLen));
   });
 
   it('텍스트 크기 제한을 넘으면 InvalidInputError', async () => {

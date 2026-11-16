@@ -1,5 +1,5 @@
 import { fromBase64url, randomBytes, toBase64url } from '../base64url';
-import { MAX_FILE_BYTES, MAX_TEXT_BYTES, PBKDF2_ITERATIONS } from '../constants';
+import { PBKDF2_ITERATIONS, maxContentBytes } from '../constants';
 import { aesDecrypt, aesEncrypt } from './aes';
 import { InvalidInputError } from './errors';
 import { IV_BYTES, decodePlain, encodePlain, packBlob, unpackBlob } from './format';
@@ -35,10 +35,6 @@ export function parseLinkKey(linkKey: string): Uint8Array {
   }
   if (bytes.length !== LINK_KEY_BYTES) throw new InvalidInputError('linkKey must be 32 bytes');
   return bytes;
-}
-
-function maxContentBytes(kind: PlainHeader['kind']): number {
-  return kind === 'file' ? MAX_FILE_BYTES : MAX_TEXT_BYTES;
 }
 
 /**
