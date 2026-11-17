@@ -16,7 +16,6 @@ database_name = "hashbox-db"
 # `wrangler d1 create hashbox-db` 실행 후 나오는 id로 교체 (로컬 개발은 이 값 그대로도 동작)
 database_id = "7a6823be-faca-40be-b8a0-f18df5df0f5f"
 migrations_dir = "migrations"
-
 [[r2_buckets]]
 binding = "BLOBS"
 bucket_name = "hashbox-blobs"
@@ -31,4 +30,8 @@ WEB_ORIGIN = "https://dev.hashbox-web.pages.dev"
 binding = "DB"
 database_name = "hashbox-db-preview"
 database_id = "1b086033-7bd7-4086-8685-4a76312fa429"
-migrations_dir = "migrations"  
+migrations_dir = "migrations"
+
+[[env.preview.r2_buckets]]
+binding = "BLOBS"
+bucket_name = "hashbox-blobs-preview"
