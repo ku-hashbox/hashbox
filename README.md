@@ -24,6 +24,7 @@ Node.js 22, pnpm 10 필요 (`corepack enable`로 pnpm 활성화).
 pnpm install
 
 # API (http://localhost:8787)
+cp apps/api/.dev.vars.example apps/api/.dev.vars
 pnpm --filter @hashbox/api db:migrate:local
 pnpm dev:api
 

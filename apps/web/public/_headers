@@ -1,6 +1,6 @@
-# Cloudflare Pages 보안 헤더. connect-src의 API 주소는 배포 도메인 확정 후 교체
+# Cloudflare Pages 보안 헤더. connect-src: 프로덕션·프리뷰 API(workers.dev). 도메인 변경 시 함께 교체
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://hashbox-api.workers.dev; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://hashbox-api.hashbox-team.workers.dev https://hashbox-api-preview.hashbox-team.workers.dev; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'
   Referrer-Policy: no-referrer
   X-Content-Type-Options: nosniff
   Strict-Transport-Security: max-age=31536000; includeSubDomains

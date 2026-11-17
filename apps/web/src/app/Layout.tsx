@@ -13,7 +13,7 @@ export default function Layout() {
       </main>
       <footer>
         <p>내용은 브라우저에서 암호화되고, 서버는 열쇠를 볼 수 없어요.</p>
-        {import.meta.env.DEV && <ApiStatus />}
+        {(import.meta.env.DEV || import.meta.env.VITE_SHOW_API_STATUS === 'true') && <ApiStatus />}
       </footer>
     </div>
   );
