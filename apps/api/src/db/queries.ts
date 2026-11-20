@@ -28,21 +28,20 @@ WHERE id = ?1
   AND (has_password = 0 OR auth_hash = ?3)
 RETURNING status, views_left`;
 
+/** 비밀번호 실패도 열기·파기와 같은 상태 조건으로 갱신한다. */
 export const ADD_FAILED_ATTEMPT = `
 UPDATE shares
 SET failed_attempts = failed_attempts + 1,
     status = CASE WHEN failed_attempts + 1 >= ?2 THEN 'locked' ELSE status END
-WHERE id = ?1 AND status = 'ready'`;
+WHERE id = ?1 AND status = 'ready' AND expires_at > ?3 AND has_password = 1
+RETURNING status, failed_attempts`;
 
 export const REVOKE = `
-UPDATE shares SET status = 'revoked'
-WHERE manage_hash = ?1 AND status IN ('pending', 'ready')`;
-
-/** Cron: 만료 대상 id 목록 (?1 now, ?2 pending 기준 시각) */
-export const SELECT_EXPIRING = `
-SELECT id FROM shares
-WHERE (status = 'ready' AND expires_at <= ?1)
-   OR (status = 'pending' AND (expires_at <= ?1 OR created_at <= ?2))`;
+UPDATE shares SET status = 'revoked', upload_hash = NULL
+WHERE id = ?1 AND expires_at > ?2 AND (
+  status = 'ready' OR (status = 'pending' AND created_at > ?3)
+)
+RETURNING id`;
 
 export const MARK_EXPIRED = `
 UPDATE shares SET status = 'expired', upload_hash = NULL
@@ -52,7 +51,29 @@ WHERE id = ?1 AND (
 )
 RETURNING *`;
 
+export const EXPIRE_BATCH = `
+UPDATE shares SET status = 'expired', upload_hash = NULL
+WHERE id IN (
+  SELECT id FROM shares
+  WHERE (status = 'ready' AND expires_at <= ?1)
+     OR (status = 'pending' AND (expires_at <= ?1 OR created_at <= ?2))
+  ORDER BY expires_at, id LIMIT ?3
+)`;
+
+export const SELECT_BLOBS_TO_DELETE = `
+SELECT id FROM shares
+WHERE status IN ('consumed', 'expired', 'revoked', 'locked') AND blob_deleted = 0
+ORDER BY expires_at, id LIMIT ?1`;
+
+export const MARK_BLOBS_DELETED = `
+UPDATE shares SET blob_deleted = 1
+WHERE id IN (SELECT value FROM json_each(?1))`;
+
+export const RETRY_BLOB_DELETION = `
+UPDATE shares SET blob_deleted = 0 WHERE id = ?1`;
+
 /** Cron: 톰스톤 보관 기간이 지난 행 삭제 (?1 기준 시각) */
 export const DELETE_OLD_ROWS = `
 DELETE FROM shares
-WHERE status IN ('consumed', 'expired', 'revoked', 'locked') AND expires_at <= ?1`;
+WHERE status IN ('consumed', 'expired', 'revoked', 'locked')
+  AND expires_at <= ?1 AND blob_deleted = 1`;

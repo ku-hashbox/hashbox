@@ -14,6 +14,6 @@ export async function getBlob(bucket: R2Bucket, id: string): Promise<ArrayBuffer
   return object ? object.arrayBuffer() : null;
 }
 
-export async function deleteBlob(bucket: R2Bucket, id: string): Promise<void> {
-  await bucket.delete(blobKey(id));
+export async function deleteBlobs(bucket: R2Bucket, ids: string[]): Promise<void> {
+  await bucket.delete(ids.map(blobKey));
 }

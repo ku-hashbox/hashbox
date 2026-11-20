@@ -1,40 +1,57 @@
 import {
+  MAX_PASSWORD_ATTEMPTS,
   PENDING_TTL_MS,
+  maxBlobBytes,
   type CreateShareRequest,
   type CreateShareResponse,
   type ManageResponse,
   type ShareMetaResponse,
 } from '@hashbox/shared';
-import { INSERT_SHARE, MARK_EXPIRED, MARK_READY, OPEN_SHARE, SELECT_SHARE } from '../db/queries';
+import {
+  ADD_FAILED_ATTEMPT,
+  INSERT_SHARE,
+  MARK_BLOBS_DELETED,
+  MARK_EXPIRED,
+  MARK_READY,
+  OPEN_SHARE,
+  RETRY_BLOB_DELETION,
+  REVOKE,
+  SELECT_BY_MANAGE,
+  SELECT_SHARE,
+} from '../db/queries';
 import type { ShareRow } from '../db/types';
 import type { Env } from '../env';
 import { newShareId, newToken, safeEqual, sha256b64url } from '../lib/tokens';
 import { isBase64url } from '../lib/validate';
-import { deleteBlob, getBlob, putBlob } from '../storage/blobs';
+import { deleteBlobs, getBlob, putBlob } from '../storage/blobs';
 
-/** 라우트는 요청·응답 변환만 하고, 규칙은 여기에 둔다 */
-
-type OpenFailure = 'NOT_FOUND' | 'CONSUMED' | 'EXPIRED' | 'REVOKED' | 'LOCKED' | 'NOT_IMPLEMENTED';
+type OpenFailure = 'NOT_FOUND' | 'CONSUMED' | 'EXPIRED' | 'REVOKED' | 'LOCKED';
 
 export type OpenResult =
-  { ok: true; blob: ArrayBuffer; viewsLeft: number } | { ok: false; reason: OpenFailure };
+  | { ok: true; blob: ArrayBuffer; viewsLeft: number }
+  | { ok: false; reason: OpenFailure }
+  | { ok: false; reason: 'WRONG_PASSWORD'; attemptsLeft: number };
 
 function findShare(env: Env, id: string): Promise<ShareRow | null> {
   if (!isBase64url(id, 12)) return Promise.resolve(null);
   return env.DB.prepare(SELECT_SHARE).bind(id).first<ShareRow>();
 }
 
-async function purgeBlob(env: Env, id: string): Promise<void> {
+async function purgeBlob(env: Env, id: string): Promise<boolean> {
   try {
-    await deleteBlob(env.BLOBS, id);
+    await deleteBlobs(env.BLOBS, [id]);
+    await env.DB.prepare(MARK_BLOBS_DELETED)
+      .bind(JSON.stringify([id]))
+      .run();
+    return true;
   } catch {
-    // 종결된 상태는 유지한다. 같은 링크를 다시 열면 삭제를 재시도한다.
+    // 상태를 유지하고 Cron에서 삭제를 재시도한다.
     console.error('share blob deletion failed');
+    return false;
   }
 }
 
-async function readShare(env: Env, id: string): Promise<ShareRow | null> {
-  const row = await findShare(env, id);
+async function expireIfDue(env: Env, row: ShareRow | null): Promise<ShareRow | null> {
   if (!row || (row.status !== 'pending' && row.status !== 'ready')) return row;
 
   const now = Date.now();
@@ -42,25 +59,31 @@ async function readShare(env: Env, id: string): Promise<ShareRow | null> {
   const pendingTimedOut = row.status === 'pending' && row.created_at <= pendingBefore;
   if (row.expires_at > now && !pendingTimedOut) return row;
 
-  const expired = await env.DB.prepare(MARK_EXPIRED).bind(id, now, pendingBefore).first<ShareRow>();
-  if (!expired) return findShare(env, id);
-
-  await purgeBlob(env, id);
+  const expired = await env.DB.prepare(MARK_EXPIRED)
+    .bind(row.id, now, pendingBefore)
+    .first<ShareRow>();
+  if (!expired) return findShare(env, row.id);
+  if (await purgeBlob(env, row.id)) expired.blob_deleted = 1;
   return expired;
+}
+
+async function readShare(env: Env, id: string): Promise<ShareRow | null> {
+  return expireIfDue(env, await findShare(env, id));
 }
 
 export async function createShare(
   env: Env,
-  { kind, size, expiresIn, maxViews }: Omit<CreateShareRequest, 'password'>,
+  { kind, size, expiresIn, maxViews, password }: CreateShareRequest,
 ): Promise<CreateShareResponse> {
   const id = newShareId();
   const manageToken = newToken();
   const uploadToken = newToken();
   const createdAt = Date.now();
   const expiresAt = createdAt + expiresIn * 1_000;
-  const [manageHash, uploadHash] = await Promise.all([
+  const [manageHash, uploadHash, authHash] = await Promise.all([
     sha256b64url(manageToken),
     sha256b64url(uploadToken),
+    password ? sha256b64url(password.authToken) : null,
   ]);
 
   await env.DB.prepare(INSERT_SHARE)
@@ -71,10 +94,10 @@ export async function createShare(
       createdAt,
       expiresAt,
       maxViews,
-      0,
-      null,
-      null,
-      null,
+      password ? 1 : 0,
+      password?.salt ?? null,
+      password?.iter ?? null,
+      authHash,
       manageHash,
       uploadHash,
     )
@@ -83,13 +106,57 @@ export async function createShare(
   return { id, manageToken, uploadToken, expiresAt };
 }
 
+async function readUploadBody(
+  request: Request,
+  size: number,
+  limit: number,
+): Promise<ArrayBuffer | 'SIZE_MISMATCH' | 'TOO_LARGE'> {
+  const length = request.headers.get('Content-Length');
+  if (length !== null) {
+    if (!/^\d+$/.test(length)) return 'SIZE_MISMATCH';
+    if (Number(length) > limit) return 'TOO_LARGE';
+    if (Number(length) !== size) return 'SIZE_MISMATCH';
+  }
+  if (!request.body) return 'SIZE_MISMATCH';
+
+  // 헤더가 없는 요청도 등록한 크기 이상 읽지 않는다.
+  const reader = request.body.getReader();
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const end = offset + value.byteLength;
+      if (end > size) {
+        return end > limit ? 'TOO_LARGE' : 'SIZE_MISMATCH';
+      }
+      bytes.set(value, offset);
+      offset = end;
+    }
+  } catch {
+    return 'SIZE_MISMATCH';
+  } finally {
+    reader.releaseLock();
+  }
+  return offset === size ? bytes.buffer : 'SIZE_MISMATCH';
+}
+
 /** uploadToken 확인 → 크기 확인 → R2 저장 → status=ready */
 export async function uploadBlob(
   env: Env,
   id: string,
   uploadToken: string,
-  body: ArrayBuffer,
-): Promise<'OK' | 'NOT_FOUND' | 'UNAUTHORIZED' | 'SIZE_MISMATCH' | 'UPLOAD_CONFLICT' | 'EXPIRED'> {
+  request: Request,
+): Promise<
+  | 'OK'
+  | 'NOT_FOUND'
+  | 'UNAUTHORIZED'
+  | 'SIZE_MISMATCH'
+  | 'TOO_LARGE'
+  | 'UPLOAD_CONFLICT'
+  | 'EXPIRED'
+> {
   const row = await readShare(env, id);
   if (!row) return 'NOT_FOUND';
   if (row.status === 'expired') return 'EXPIRED';
@@ -98,11 +165,12 @@ export async function uploadBlob(
   if (row.status !== 'pending' || !row.upload_hash || !safeEqual(uploadHash, row.upload_hash)) {
     return 'UNAUTHORIZED';
   }
-  if (body.byteLength !== row.size) return 'SIZE_MISMATCH';
+  const body = await readUploadBody(request, row.size, maxBlobBytes(row.kind));
+  if (typeof body === 'string') return body;
 
   const stored = await putBlob(env.BLOBS, id, body);
   if (!stored) {
-    // R2 저장 뒤 D1 갱신에 실패한 업로드는 같은 암호문으로 재시도할 수 있다.
+    // R2 저장 뒤 D1 갱신에 실패했다면 같은 암호문으로 다시 시도할 수 있다.
     const existing = await getBlob(env.BLOBS, id);
     if (
       !existing ||
@@ -121,7 +189,8 @@ export async function uploadBlob(
 
   const current = await readShare(env, id);
   if (!current || (current.status !== 'ready' && current.status !== 'pending')) {
-    // 업로드 도중 만료 또는 소진된 상자의 암호문이 남지 않게 한다.
+    // 업로드 직전에 다른 요청이 파기·만료 처리하고 삭제했을 수도 있다.
+    await env.DB.prepare(RETRY_BLOB_DELETION).bind(id).run();
     await purgeBlob(env, id);
   }
   return current?.status === 'expired' ? 'EXPIRED' : 'UPLOAD_CONFLICT';
@@ -149,7 +218,6 @@ export async function getShareMeta(env: Env, id: string): Promise<ShareMetaRespo
 function openFailure(row: ShareRow | null): OpenFailure | null {
   switch (row?.status) {
     case 'ready':
-      if (row.has_password) return 'NOT_IMPLEMENTED';
       return row.views_left > 0 ? null : 'CONSUMED';
     case 'consumed':
       return 'CONSUMED';
@@ -164,34 +232,80 @@ function openFailure(row: ShareRow | null): OpenFailure | null {
   }
 }
 
+function failedOpen(row: ShareRow | null): OpenResult {
+  const reason = openFailure(row);
+  if (!reason) throw new Error('ready share could not be opened');
+  return { ok: false, reason };
+}
+
 /** 암호문을 확보한 요청 중 D1 차감에 성공한 요청만 암호문을 받는다. */
-export async function openShare(env: Env, id: string): Promise<OpenResult> {
-  const initialFailure = openFailure(await readShare(env, id));
-  if (initialFailure) {
-    if (initialFailure === 'CONSUMED' || initialFailure === 'EXPIRED') await purgeBlob(env, id);
-    return { ok: false, reason: initialFailure };
+export async function openShare(env: Env, id: string, authToken?: string): Promise<OpenResult> {
+  const row = await readShare(env, id);
+  if (!row || openFailure(row)) return failedOpen(row);
+
+  let authHash: string | null = null;
+  if (row.has_password === 1) {
+    authHash = authToken ? await sha256b64url(authToken) : null;
+    if (!authHash || !row.auth_hash || !safeEqual(authHash, row.auth_hash)) {
+      const attempt = await env.DB.prepare(ADD_FAILED_ATTEMPT)
+        .bind(id, MAX_PASSWORD_ATTEMPTS, Date.now())
+        .first<Pick<ShareRow, 'status' | 'failed_attempts'>>();
+      if (!attempt) return failedOpen(await readShare(env, id));
+      if (attempt.status === 'locked') {
+        await purgeBlob(env, id);
+        return { ok: false, reason: 'LOCKED' };
+      }
+      return {
+        ok: false,
+        reason: 'WRONG_PASSWORD',
+        attemptsLeft: MAX_PASSWORD_ATTEMPTS - attempt.failed_attempts,
+      };
+    }
   }
 
   const blob = await getBlob(env.BLOBS, id);
   const opened =
     blob &&
     (await env.DB.prepare(OPEN_SHARE)
-      .bind(id, Date.now(), null)
+      .bind(id, Date.now(), authHash)
       .first<Pick<ShareRow, 'status' | 'views_left'>>());
-  if (!blob || !opened) {
-    const reason = openFailure(await readShare(env, id));
-    if (reason) return { ok: false, reason };
-    throw new Error('ready share could not be opened');
-  }
+  if (!blob || !opened) return failedOpen(await readShare(env, id));
 
   if (opened.status === 'consumed') await purgeBlob(env, id);
   return { ok: true, blob, viewsLeft: opened.views_left };
 }
 
-export async function getManage(env: Env, manageToken: string): Promise<ManageResponse | null> {
-  throw new Error('TODO(BE): getManage');
+async function findManagedShare(env: Env, manageToken: string): Promise<ShareRow | null> {
+  const hash = await sha256b64url(manageToken);
+  return env.DB.prepare(SELECT_BY_MANAGE).bind(hash).first<ShareRow>();
 }
 
-export async function revokeShare(env: Env, manageToken: string): Promise<void> {
-  throw new Error('TODO(BE): revokeShare');
+export async function getManage(env: Env, manageToken: string): Promise<ManageResponse | null> {
+  const row = await expireIfDue(env, await findManagedShare(env, manageToken));
+  if (!row) return null;
+
+  return {
+    id: row.id,
+    status: row.status,
+    maxViews: row.max_views,
+    viewsLeft: row.views_left,
+    expiresAt: row.expires_at,
+    firstOpenedAt: row.first_opened_at,
+    lastOpenedAt: row.last_opened_at,
+  };
+}
+
+export async function revokeShare(env: Env, manageToken: string): Promise<boolean> {
+  const row = await findManagedShare(env, manageToken);
+  if (!row) return false;
+
+  const now = Date.now();
+  const revoked = await env.DB.prepare(REVOKE)
+    .bind(row.id, now, now - PENDING_TTL_MS)
+    .first<{ id: string }>();
+  const current = revoked ? null : await readShare(env, row.id);
+  if ((revoked || current?.blob_deleted === 0) && !(await purgeBlob(env, row.id))) {
+    throw new Error('share revocation cleanup failed');
+  }
+  return true;
 }
