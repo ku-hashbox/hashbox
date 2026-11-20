@@ -61,6 +61,7 @@ export type ErrorCode =
   | 'TOO_LARGE'
   | 'UNAUTHORIZED'
   | 'RATE_LIMITED'
+  | 'NOT_IMPLEMENTED'
   | 'INTERNAL';
 
 export interface ErrorResponse {
