@@ -1,3 +1,5 @@
+import type { ShareKind } from './types';
+
 /** 프론트·백엔드가 공통으로 쓰는 값. 값을 바꿀 땐 개발 기획서도 같이 고친다. */
 
 /** 만료 시간 선택지 (초): 10분, 1시간, 1일, 7일 */
@@ -17,6 +19,21 @@ export const MAX_FILE_BYTES = 25 * 1024 * 1024; // 파일 25MB
 /** 암호화 오버헤드: 버전 1B + IV 12B + GCM 태그 16B (+ 평문 헤더는 별도) */
 export const CIPHER_OVERHEAD_BYTES = 1 + 12 + 16;
 export const MAX_HEADER_BYTES = 1024;
+/** 평문 포맷의 헤더 길이 필드 */
+export const PLAIN_HEADER_LEN_BYTES = 4;
+
+/** 종류별 평문 내용 상한 */
+export function maxContentBytes(kind: ShareKind): number {
+  return kind === 'file' ? MAX_FILE_BYTES : MAX_TEXT_BYTES;
+}
+
+/**
+ * 서버가 받아도 되는 암호문(blob) 최대 크기.
+ * POST /api/shares의 size 검증(초과 시 413)에 그대로 쓴다.
+ */
+export function maxBlobBytes(kind: ShareKind): number {
+  return maxContentBytes(kind) + PLAIN_HEADER_LEN_BYTES + MAX_HEADER_BYTES + CIPHER_OVERHEAD_BYTES;
+}
 
 export const MAX_PASSWORD_ATTEMPTS = 5;
 export const PBKDF2_ITERATIONS = 600_000;

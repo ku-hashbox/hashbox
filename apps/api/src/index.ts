@@ -8,6 +8,12 @@ import { runCleanup } from './cron/cleanup';
 
 const app = new Hono<{ Bindings: Env }>();
 
+// 오류 및 CORS 사전 요청을 포함한 모든 API 응답은 캐시 금지
+app.use('/api/*', async (c, next) => {
+  await next();
+  c.header('Cache-Control', 'no-store');
+});
+
 // 프론트 출처만 허용
 app.use('/api/*', (c, next) =>
   cors({
@@ -19,27 +25,21 @@ app.use('/api/*', (c, next) =>
   })(c, next),
 );
 
-// 모든 API 응답은 캐시 금지
-app.use('/api/*', async (c, next) => {
-  await next();
-  c.header('Cache-Control', 'no-store');
-});
-
 app.get('/api/health', (c) => c.json({ ok: true }));
 app.route('/api/shares', shares);
 app.route('/api/manage', manage);
 
 app.notFound((c) => fail(c, 404, 'NOT_FOUND', '없는 경로예요.'));
 
-app.onError((err, c) => {
+app.onError((_err, c) => {
   // 요청 본문·토큰은 절대 로그에 남기지 않는다
-  console.error('unhandled error', err.name);
+  console.error('unhandled API error');
   return fail(c, 500, 'INTERNAL', '서버 오류가 발생했어요.');
 });
 
 export default {
   fetch: app.fetch,
-  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(runCleanup(env));
+  async scheduled(event: ScheduledController, env: Env) {
+    await runCleanup(env, event.scheduledTime);
   },
 } satisfies ExportedHandler<Env>;
