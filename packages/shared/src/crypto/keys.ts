@@ -61,7 +61,7 @@ export async function deriveContentKey(
   pwKey?: Uint8Array,
 ): Promise<CryptoKey> {
   if (linkKey.length !== LINK_KEY_BYTES) throw new InvalidInputError('linkKey must be 32 bytes');
-  const usages: KeyUsage[] = ['encrypt', 'decrypt'];
+  const usages: Array<'encrypt' | 'decrypt'> = ['encrypt', 'decrypt'];
 
   if (!pwKey) {
     return crypto.subtle.importKey('raw', bytes(linkKey), { name: 'AES-GCM' }, false, usages);
