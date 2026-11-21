@@ -16,3 +16,417 @@ body {
   margin: 0 auto;
   padding: 24px 16px;
 }
+
+/* ===================================================================== */
+/* FE1: 보내기 / env / 관리 화면 (send, env, manage)                      */
+/* 색은 와이어프레임에 맞춘 그레이스케일. FE2가 디자인 토큰으로 조정 가능.    */
+/* ===================================================================== */
+:root {
+  --fg: #1a1d21;
+  --muted: #6b7280;
+  --border: #d9dce1;
+  --panel: #f4f5f7;
+  --accent: #15181c;
+  --danger: #c0392b;
+  --ok: #15803d;
+}
+
+.card {
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 22px;
+  background: #fff;
+  max-width: 440px;
+  margin: 8px auto;
+}
+.card *,
+.card *::before,
+.card *::after {
+  box-sizing: border-box;
+}
+.card h1 {
+  font-size: 20px;
+  margin: 0 0 4px;
+}
+.intro {
+  color: var(--muted);
+  font-size: 13.5px;
+  margin: 0 0 18px;
+}
+.muted {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* tabs */
+.card [role='tablist'] {
+  display: flex;
+  gap: 4px;
+  background: var(--panel);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 18px;
+}
+.card [role='tab'] {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font: inherit;
+  color: var(--muted);
+  cursor: pointer;
+}
+.card [role='tab'][aria-selected='true'] {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* fields */
+.field {
+  margin: 16px 0;
+}
+.field-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.card textarea,
+.card input[type='text'],
+.card input[type='password'],
+.card input[type='file'] {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 11px 12px;
+  font: inherit;
+}
+.card textarea {
+  min-height: 132px;
+  resize: vertical;
+}
+.bytecount {
+  text-align: right;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+.bytecount[data-over='true'] {
+  color: var(--danger);
+}
+
+/* segmented controls */
+.seg {
+  display: flex;
+  gap: 8px;
+}
+.seg button {
+  flex: 1;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--fg);
+  padding: 9px 0;
+  border-radius: 8px;
+  font: inherit;
+  cursor: pointer;
+}
+.seg button[aria-pressed='true'] {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+/* checkbox row */
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  margin: 14px 0;
+}
+
+/* password */
+.pwrow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.pwrow input {
+  flex: 1;
+}
+
+/* text-only buttons */
+.linklike {
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+/* main buttons */
+.card button[data-variant='primary'] {
+  width: 100%;
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+  padding: 13px;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8px;
+}
+.card button[data-variant='primary']:disabled {
+  background: #c7cbd1;
+  cursor: not-allowed;
+}
+.card button[data-variant='ghost'] {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--fg);
+  padding: 11px;
+  border-radius: 10px;
+  font: inherit;
+  cursor: pointer;
+  margin-top: 8px;
+}
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 8px;
+  text-align: center;
+}
+.hint.left {
+  text-align: left;
+}
+
+/* dropzone */
+.dropzone {
+  border: 1.5px dashed var(--border);
+  border-radius: 12px;
+  padding: 26px 16px;
+  text-align: center;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dropzone[data-active='true'] {
+  border-color: var(--accent);
+  background: var(--panel);
+}
+.dropzone strong {
+  color: var(--fg);
+}
+
+/* env list */
+.envlist {
+  display: flex;
+  flex-direction: column;
+}
+.envrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 2px;
+  border-bottom: 1px solid #edeef0;
+}
+.envrow code {
+  flex: 1;
+  font-size: 13px;
+}
+.envval {
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  min-width: 70px;
+  text-align: right;
+}
+.addrow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.addrow input {
+  flex: 1;
+  min-width: 0;
+}
+.more {
+  margin-top: 10px;
+  font-size: 13px;
+}
+.more summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+.more textarea {
+  margin-top: 8px;
+}
+
+/* result link rows */
+.linkrow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.linkrow input {
+  flex: 1;
+  min-width: 0;
+  background: var(--panel);
+}
+.linkrow button {
+  white-space: nowrap;
+}
+.linkrow button:not([data-variant]) {
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+.linkrow button[data-variant='ghost'] {
+  width: auto;
+  margin-top: 0;
+}
+
+/* sending progress (screen 4) */
+.disabled-box {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 24px 12px;
+  color: var(--muted);
+  background: var(--panel);
+  text-align: center;
+}
+.steps {
+  list-style: none;
+  margin: 14px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.step {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+.step small {
+  color: var(--muted);
+}
+.step[data-state='완료'] small {
+  color: var(--ok);
+}
+.step[data-state='실패'] small {
+  color: var(--danger);
+  font-weight: 600;
+}
+.step[data-state='올리는 중'] small,
+.step[data-state='진행 중'] small {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* manage */
+.statusline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 8px 0 14px;
+}
+.statusline strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #9aa0a6;
+  display: inline-block;
+}
+.dot[data-active='true'] {
+  background: var(--ok);
+}
+.kv {
+  margin: 0;
+}
+.kv > div {
+  display: flex;
+  justify-content: space-between;
+  padding: 7px 0;
+  border-bottom: 1px solid #edeef0;
+  font-size: 14px;
+}
+.kv dt {
+  color: var(--muted);
+  margin: 0;
+}
+.kv dd {
+  margin: 0;
+}
+.confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+.confirm-actions button {
+  flex: 1;
+  width: auto;
+}
+
+/* notice tones */
+.card [data-tone] {
+  border-radius: 10px;
+  padding: 11px 13px;
+  font-size: 13px;
+  margin: 12px 0;
+}
+.card [data-tone='info'] {
+  background: #eef3fb;
+  color: #1e3a8a;
+}
+.card [data-tone='warning'] {
+  background: #fdf5e6;
+  color: #92400e;
+}
+.card [data-tone='danger'] {
+  background: #fdeceb;
+  color: var(--danger);
+}
+
+/* --- page frame (FE2's Layout; minimal styling so preview matches mocks) --- */
+body {
+  background: #fafbfc;
+  color: var(--fg);
+}
+.layout {
+  max-width: 480px;
+}
+.layout > header {
+  margin-bottom: 8px;
+}
+.layout > header a {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--accent);
+  text-decoration: none;
+}
+.layout > footer {
+  margin-top: 28px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.card {
+  margin: 8px 0;
+}
