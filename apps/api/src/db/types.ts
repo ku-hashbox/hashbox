@@ -19,4 +19,5 @@ export interface ShareRow {
   upload_hash: string | null;
   first_opened_at: number | null;
   last_opened_at: number | null;
+  blob_deleted: 0 | 1;
 }
