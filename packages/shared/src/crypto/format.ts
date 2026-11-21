@@ -9,7 +9,7 @@ const HEADER_LEN_BYTES = 4;
 const KINDS = new Set(['text', 'env', 'file']);
 
 const utf8Encoder = new TextEncoder();
-const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
+const utf8Decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: false });
 
 /** [헤더 길이 4B big-endian][헤더 JSON UTF-8][내용] */
 export function encodePlain(header: PlainHeader, content: Uint8Array): Uint8Array {
