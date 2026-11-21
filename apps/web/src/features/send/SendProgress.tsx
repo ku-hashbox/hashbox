@@ -57,7 +57,7 @@ export default function SendProgress(props: {
       </ol>
       {props.hasPassword && status.phase === 'encrypting' && (
         <p className="hint left">
-          열쇠를 만드는 데 1초쯤 걸려요. 휴대폰에서는 좀 더 걸릴 수 있어요.
+          비밀번호로 열쇠를 만드는 중이에요. 몇 초 걸릴 수 있고, 휴대폰에서는 더 걸려요.
         </p>
       )}
 

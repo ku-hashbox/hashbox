@@ -6,7 +6,7 @@ import type {
   PlainHeader,
 } from '@hashbox/shared';
 import { encryptPayload } from '@hashbox/shared';
-import { ApiError, createShare, uploadBlob } from '../../lib/api';
+import { ApiError, createShare, getManage, uploadBlob } from '../../lib/api';
 import { buildManageUrl, buildReceiveUrl } from '../../lib/format';
 import type { SendDone, SendOptions } from './types';
 
@@ -24,18 +24,24 @@ export interface SendStatus {
 interface Pending {
   id: string;
   uploadToken: string;
+  /** 업로드 응답을 잃었을 때 상자가 이미 올라갔는지 확인하는 데 쓴다 */
+  manageToken: string;
   blob: Uint8Array;
   done: SendDone;
 }
 
+/** UPLOAD_CONFLICT(409)는 BE PR #45에서 ErrorCode에 추가된다. 머지 후엔 ErrorCode만 써도 된다 */
+type SendErrorCode = ErrorCode | 'UPLOAD_CONFLICT';
+
 /** 보내기 중 서버가 줄 수 있는 오류 코드별 안내 문구 */
-const SEND_ERROR_TEXT: Partial<Record<ErrorCode, string>> = {
+const SEND_ERROR_TEXT: Partial<Record<SendErrorCode, string>> = {
   BAD_REQUEST: '보낼 수 없는 요청이에요. 옵션을 다시 확인하세요.',
   TOO_LARGE: '내용이 너무 커요. 크기를 줄여서 다시 보내세요.',
   RATE_LIMITED: '요청이 너무 많아요. 잠시 후 다시 시도하세요.',
   UNAUTHORIZED: '업로드 권한이 만료됐어요. 처음부터 다시 보내세요.',
   NOT_FOUND: '상자를 찾을 수 없어요. 처음부터 다시 보내세요.',
   EXPIRED: '상자가 만료됐어요. 처음부터 다시 보내세요.',
+  UPLOAD_CONFLICT: '이미 업로드된 상자예요. 처음부터 다시 보내세요.',
   INTERNAL: '서버에 문제가 생겼어요. 잠시 후 다시 시도하세요.',
 };
 
@@ -45,6 +51,31 @@ function sendErrorMessage(e: unknown, fallback: string): string {
   if (e instanceof ApiError && e.code) return SEND_ERROR_TEXT[e.code] ?? fallback;
   console.error(e);
   return fallback;
+}
+
+/** 업로드를 다시 해도 소용없는 오류: 상자가 없거나, 만료됐거나, 이미 업로드됨 */
+const FATAL_UPLOAD: SendErrorCode[] = ['NOT_FOUND', 'EXPIRED', 'UNAUTHORIZED', 'UPLOAD_CONFLICT'];
+
+function isFatalUpload(e: unknown): boolean {
+  return e instanceof ApiError && e.code !== null && FATAL_UPLOAD.includes(e.code);
+}
+
+/**
+ * 업로드. 앞선 업로드가 실제로는 성공했는데 응답만 잃은 경우,
+ * 서버는 재시도에 401·409를 준다. 그때 상자가 ready면 성공으로 본다.
+ */
+async function uploadOrConfirm(p: Pending): Promise<void> {
+  try {
+    await uploadBlob(p.id, p.uploadToken, p.blob);
+  } catch (e) {
+    // 업로드가 이미 끝난 상자에 다시 올리면 서버가 주는 오류
+    const recheck: SendErrorCode[] = ['UNAUTHORIZED', 'UPLOAD_CONFLICT'];
+    if (e instanceof ApiError && e.code !== null && recheck.includes(e.code)) {
+      const m = await getManage(p.manageToken).catch(() => null);
+      if (m?.status === 'ready') return;
+    }
+    throw e;
+  }
 }
 
 /**
@@ -91,17 +122,25 @@ export function useSend() {
         maxViews: options.maxViews,
         expiresAt: share.expiresAt,
       };
-      pending.current = { id: share.id, uploadToken: share.uploadToken, blob: enc.blob, done };
+      pending.current = {
+        id: share.id,
+        uploadToken: share.uploadToken,
+        manageToken: share.manageToken,
+        blob: enc.blob,
+        done,
+      };
 
       // 3. 암호문 업로드.
       current = 'uploading';
       setStatus({ phase: 'uploading', error: null, canRetryUpload: true });
-      await uploadBlob(share.id, share.uploadToken, enc.blob);
+      await uploadOrConfirm(pending.current);
 
       pending.current = null;
       setStatus({ phase: 'done', error: null, canRetryUpload: false });
       return done;
     } catch (e) {
+      // 다시 올려도 안 되는 오류면 상자를 버리고 처음부터 보내게 한다
+      if (isFatalUpload(e)) pending.current = null;
       setStatus({
         phase: 'error',
         error: sendErrorMessage(e, '전송에 실패했어요.'),
@@ -118,16 +157,18 @@ export function useSend() {
     if (!p) return null;
     try {
       setStatus({ phase: 'uploading', error: null, canRetryUpload: true });
-      await uploadBlob(p.id, p.uploadToken, p.blob);
+      await uploadOrConfirm(p);
       pending.current = null;
       setStatus({ phase: 'done', error: null, canRetryUpload: false });
       return p.done;
     } catch (e) {
+      const fatal = isFatalUpload(e);
+      if (fatal) pending.current = null;
       setStatus({
         phase: 'error',
         error: sendErrorMessage(e, '업로드에 실패했어요.'),
         failedPhase: 'uploading',
-        canRetryUpload: true,
+        canRetryUpload: !fatal,
       });
       return null;
     }
