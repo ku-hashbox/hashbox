@@ -4,6 +4,7 @@ import type { EnvEntry } from '@hashbox/shared';
 import type { SendPayload } from '../send/types';
 import Button from '../../components/Button';
 import { formatBytes } from '../../lib/format';
+import { quoteEnvValue } from './quoteEnvValue';
 
 const KEY_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
@@ -99,17 +100,14 @@ export default function EnvKeyList(props: {
       setAddError('이미 있는 키예요.');
       return;
     }
-    if (/[\r\n]/.test(newVal)) {
-      setAddError('값에 줄바꿈은 넣을 수 없어요.');
-      return;
-    }
     setAddError(null);
     // 여러 줄 값(PEM 등)은 endLine까지 차지하므로 끝 줄 기준으로 다음 번호를 정한다
     const maxLine = entries.reduce((m, e) => Math.max(m, e.endLine), 0);
     const entry: EnvEntry = {
       line: maxLine + 1,
       endLine: maxLine + 1,
-      raw: `${key}=${newVal}`,
+      // 공백·#·따옴표·\ 가 있는 값은 받는 쪽에서 그대로 읽히도록 따옴표로 감싼다
+      raw: `${key}=${quoteEnvValue(newVal)}`,
       key,
       value: newVal,
       ignorable: false,
