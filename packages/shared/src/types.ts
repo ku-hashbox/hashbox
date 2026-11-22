@@ -52,6 +52,7 @@ export interface ManageResponse {
 
 export type ErrorCode =
   | 'BAD_REQUEST'
+  | 'UPLOAD_CONFLICT'
   | 'NOT_FOUND'
   | 'WRONG_PASSWORD'
   | 'CONSUMED'
@@ -61,6 +62,7 @@ export type ErrorCode =
   | 'TOO_LARGE'
   | 'UNAUTHORIZED'
   | 'RATE_LIMITED'
+  | 'NOT_IMPLEMENTED'
   | 'INTERNAL';
 
 export interface ErrorResponse {

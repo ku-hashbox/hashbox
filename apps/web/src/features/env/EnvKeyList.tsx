@@ -104,9 +104,11 @@ export default function EnvKeyList(props: {
       return;
     }
     setAddError(null);
-    const maxLine = entries.reduce((m, e) => Math.max(m, e.line), 0);
+    // 여러 줄 값(PEM 등)은 endLine까지 차지하므로 끝 줄 기준으로 다음 번호를 정한다
+    const maxLine = entries.reduce((m, e) => Math.max(m, e.endLine), 0);
     const entry: EnvEntry = {
       line: maxLine + 1,
+      endLine: maxLine + 1,
       raw: `${key}=${newVal}`,
       key,
       value: newVal,
