@@ -6,7 +6,8 @@ import Button from '../../components/Button';
 import { formatBytes } from '../../lib/format';
 import { quoteEnvValue } from './quoteEnvValue';
 
-const KEY_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+/** 파서(env-parser)가 키로 인정하는 형태와 같게 */
+const KEY_NAME = /^[A-Za-z_][A-Za-z0-9_.-]*$/;
 
 const encoder = new TextEncoder();
 
@@ -37,6 +38,9 @@ export default function EnvKeyList(props: {
   }, []);
 
   const keyEntries = entries.filter((e) => e.key);
+  /** 뒤에 같은 키가 또 있어 실제로는 적용되지 않는 항목은 빼고 */
+  const activeKeyEntries = keyEntries.filter((e) => !e.overridden);
+  const overriddenCount = keyEntries.length - activeKeyEntries.length;
   const invalidEntries = entries.filter((e) => e.invalid);
   const selectedKeyCount = keyEntries.filter((e) => selected.has(e.line)).length;
 
@@ -57,9 +61,10 @@ export default function EnvKeyList(props: {
     setRaw(text);
     const parsed = parseEnv(text);
     setEntries(parsed);
-    const all = new Set(parsed.filter((e) => e.key).map((e) => e.line));
-    setSelected(all);
-    emit(parsed, all);
+    // 같은 키가 여러 번 있으면 마지막 것만 적용되므로, 덮어써진(overridden) 줄은 기본으로 뺀다
+    const initial = new Set(parsed.filter((e) => e.key && !e.overridden).map((e) => e.line));
+    setSelected(initial);
+    emit(parsed, initial);
   }
 
   function toggle(line: number) {
@@ -71,10 +76,10 @@ export default function EnvKeyList(props: {
   }
 
   function toggleAll() {
-    // 키 줄만 켜고 끈다. 해석 불가 줄의 선택은 그대로 둔다.
+    // 적용되는 키 줄만 켜고 끈다. 덮어써진 줄과 해석 불가 줄의 선택은 그대로 둔다.
     const next = new Set(selected);
-    const allOn = keyEntries.every((e) => next.has(e.line));
-    for (const e of keyEntries) {
+    const allOn = activeKeyEntries.every((e) => next.has(e.line));
+    for (const e of activeKeyEntries) {
       if (allOn) next.delete(e.line);
       else next.add(e.line);
     }
@@ -93,7 +98,7 @@ export default function EnvKeyList(props: {
     const key = newKey.trim();
     if (!key) return;
     if (!KEY_NAME.test(key)) {
-      setAddError('키는 영문·숫자·_ 만 쓸 수 있고, 숫자로 시작할 수 없어요.');
+      setAddError('키는 영문이나 _로 시작하고, 영문·숫자·_ . - 만 쓸 수 있어요.');
       return;
     }
     if (keyEntries.some((e) => e.key === key)) {
@@ -178,7 +183,7 @@ export default function EnvKeyList(props: {
     props.onPayload(null);
   }
 
-  const allSelected = selectedKeyCount === keyEntries.length;
+  const allSelected = activeKeyEntries.every((e) => selected.has(e.line));
   return (
     <div className="field">
       <label className="check">
@@ -189,6 +194,13 @@ export default function EnvKeyList(props: {
         </span>
       </label>
 
+      {overriddenCount > 0 && (
+        <p className="hint left">
+          같은 키가 여러 번 있으면 마지막 값만 적용돼요. 덮어써진 앞의 값 {overriddenCount}개는 빼고
+          보내요. 필요하면 직접 체크하세요.
+        </p>
+      )}
+
       <div className="envlist">
         {keyEntries.map((e) => (
           <div className="envrow" key={e.line}>
@@ -196,9 +208,10 @@ export default function EnvKeyList(props: {
               type="checkbox"
               checked={selected.has(e.line)}
               onChange={() => toggle(e.line)}
-              aria-label={e.key}
+              aria-label={e.overridden ? `${e.key} (덮어써짐)` : e.key}
             />
             <code>{e.key}</code>
+            {e.overridden && <span className="muted">덮어써짐</span>}
             <span className="envval">{reveal.has(e.line) ? e.value || '(빈 값)' : '••••••'}</span>
             <button className="linklike" type="button" onClick={() => toggleReveal(e.line)}>
               {reveal.has(e.line) ? '가림' : '보기'}
@@ -210,8 +223,8 @@ export default function EnvKeyList(props: {
       {invalidEntries.length > 0 && (
         <div className="field">
           <p className="hint left">
-            해석할 수 없는 줄 {invalidEntries.length}개 (여러 줄 값 등). 체크하면 원문 그대로, 원래
-            순서에 맞춰 보내요.
+            해석할 수 없는 줄 {invalidEntries.length}개 (닫히지 않은 따옴표 등). 체크하면 원문
+            그대로, 원래 순서에 맞춰 보내요.
           </p>
           <div className="envlist">
             {invalidEntries.map((e) => (
