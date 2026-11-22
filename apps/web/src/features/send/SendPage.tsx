@@ -10,6 +10,7 @@ import SendProgress from './SendProgress';
 import EnvKeyList from '../env/EnvKeyList';
 import { useSend } from './useSend';
 import Button from '../../components/Button';
+import { MIN_PASSWORD_LENGTH, isPasswordTooShort } from './password';
 
 const DEFAULT_OPTIONS: SendOptions = {
   expiresIn: DEFAULT_EXPIRES,
@@ -82,7 +83,7 @@ export default function SendPage() {
     return send(payload.header, payload.content, options);
   }
 
-  const pwMissing = options.usePassword && options.password === '';
+  const pwInvalid = options.usePassword && isPasswordTooShort(options.password);
 
   return (
     <section className="card send">
@@ -106,11 +107,13 @@ export default function SendPage() {
 
       <OptionsPicker value={options} onChange={setOptions} />
 
-      <Button variant="primary" disabled={!payload || pwMissing} onClick={handleSend}>
+      <Button variant="primary" disabled={!payload || pwInvalid} onClick={handleSend}>
         링크 만들기
       </Button>
       {!payload && <p className="hint">내용을 입력하면 눌려져요.</p>}
-      {payload && pwMissing && <p className="hint">비밀번호를 입력하거나 끄세요.</p>}
+      {payload && pwInvalid && (
+        <p className="hint">비밀번호를 {MIN_PASSWORD_LENGTH}자 이상 입력하거나 끄세요.</p>
+      )}
     </section>
   );
 }

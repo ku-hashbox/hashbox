@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { EXPIRES_OPTIONS, VIEWS_OPTIONS } from '@hashbox/shared';
 import type { ExpiresIn, MaxViews } from '@hashbox/shared';
 import type { SendOptions } from './types';
+import { MIN_PASSWORD_LENGTH, isPasswordTooShort, passwordLength } from './password';
 
 const EXPIRES_LABEL: Record<ExpiresIn, string> = {
   600: '10분',
@@ -67,7 +68,9 @@ export default function OptionsPicker(props: {
           <div className="pwrow">
             <input
               type={show ? 'text' : 'password'}
-              placeholder="비밀번호 입력"
+              aria-label="비밀번호"
+              minLength={MIN_PASSWORD_LENGTH}
+              placeholder={`비밀번호 입력 (${MIN_PASSWORD_LENGTH}자 이상)`}
               value={value.password}
               onChange={(e) => onChange({ ...value, password: e.target.value })}
             />
@@ -75,6 +78,12 @@ export default function OptionsPicker(props: {
               {show ? '숨기기' : '보기'}
             </button>
           </div>
+          {value.password !== '' && isPasswordTooShort(value.password) && (
+            <p className="bytecount" data-over="true">
+              {MIN_PASSWORD_LENGTH}자 이상 입력하세요 ({passwordLength(value.password)}/
+              {MIN_PASSWORD_LENGTH})
+            </p>
+          )}
           <p className="hint left">
             비밀번호는 링크와 다른 방법으로 전달하세요. 5번 틀리면 상자가 삭제돼요.
           </p>
