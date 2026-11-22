@@ -1,12 +1,9 @@
 import {
-  CIPHER_OVERHEAD_BYTES,
   EXPIRES_OPTIONS,
-  MAX_FILE_BYTES,
-  MAX_HEADER_BYTES,
-  MAX_TEXT_BYTES,
   PBKDF2_ITERATIONS,
   VIEWS_OPTIONS,
   fromBase64url,
+  maxBlobBytes,
   toBase64url,
   type CreateShareRequest,
   type ExpiresIn,
@@ -40,7 +37,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function validateCreateShare(
   body: unknown,
-): { ok: true; value: CreateShareRequest } | { ok: false; message: string } {
+): { ok: true; value: CreateShareRequest } | { ok: false; message: string; code?: 'TOO_LARGE' } {
   if (!isRecord(body)) return { ok: false, message: '요청 본문은 JSON 객체여야 해요.' };
 
   const { kind, size, expiresIn, maxViews, password } = body;
@@ -50,11 +47,11 @@ export function validateCreateShare(
   if (!isExpiresIn(expiresIn)) return { ok: false, message: '지원하지 않는 만료 시간이에요.' };
   if (!isMaxViews(maxViews)) return { ok: false, message: '지원하지 않는 열람 횟수예요.' };
 
-  const maxContentBytes = kind === 'file' ? MAX_FILE_BYTES : MAX_TEXT_BYTES;
-  // 암호문에는 내용과 함께 헤더 길이(4바이트), 헤더, 암호화 오버헤드가 들어간다.
-  const maxBlobBytes = maxContentBytes + 4 + MAX_HEADER_BYTES + CIPHER_OVERHEAD_BYTES;
-  if (typeof size !== 'number' || !Number.isInteger(size) || size <= 0 || size > maxBlobBytes) {
+  if (typeof size !== 'number' || !Number.isInteger(size) || size <= 0) {
     return { ok: false, message: '암호문 크기가 허용 범위를 벗어났어요.' };
+  }
+  if (size > maxBlobBytes(kind)) {
+    return { ok: false, code: 'TOO_LARGE', message: '암호문 크기가 허용 범위를 벗어났어요.' };
   }
 
   const value: CreateShareRequest = { kind, size, expiresIn, maxViews };
@@ -69,4 +66,8 @@ export function validateCreateShare(
   }
 
   return { ok: true, value };
+}
+
+export function validateOpenShare(body: unknown): body is { authToken?: string } {
+  return isRecord(body) && (body.authToken === undefined || isBase64url(body.authToken, 32));
 }
