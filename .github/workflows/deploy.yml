@@ -1,0 +1,87 @@
+# CI가 성공한 push에 대해서만 배포한다.
+#   dev  → 프리뷰:   https://dev.hashbox-web.pages.dev ↔ https://hashbox-api-preview.hashbox-team.workers.dev
+#   main → 프로덕션: https://hashbox-web.pages.dev     ↔ https://hashbox-api.hashbox-team.workers.dev
+# 주의: workflow_run 트리거는 기본 브랜치(dev)에 있는 이 파일 기준으로 동작한다.
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI] # ci.yml의 name: 과 정확히 같아야 함
+    types: [completed]
+    branches: [main, dev]
+
+concurrency:
+  group: deploy-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # CI 성공 + push로 시작된 실행만 (PR에서 돈 CI는 배포하지 않음)
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }} # CI가 검사한 바로 그 커밋
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # 토큰을 넣지 않은 상태에서 설치 (설치 스크립트가 토큰을 읽지 못하게)
+      - run: pnpm install --frozen-lockfile
+
+      - name: Set target (production / preview)
+        id: t
+        env:
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          if [ "$BRANCH" = "main" ]; then
+            echo "flag=" >> "$GITHUB_OUTPUT"
+            echo "api=https://hashbox-api.hashbox-team.workers.dev" >> "$GITHUB_OUTPUT"
+            # 발표 전에 false로 바꿔 프로덕션에서 ApiStatus 숨기기
+            echo "show_status=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "flag=--env preview" >> "$GITHUB_OUTPUT"
+            echo "api=https://hashbox-api-preview.hashbox-team.workers.dev" >> "$GITHUB_OUTPUT"
+            echo "show_status=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: API - D1 migrations
+        working-directory: apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler d1 migrations apply DB --remote ${{ steps.t.outputs.flag }}
+
+      - name: API - deploy Worker
+        working-directory: apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler deploy ${{ steps.t.outputs.flag }}
+
+      - name: Web - build
+        run: pnpm --filter @hashbox/web build
+        env:
+          VITE_API_BASE: ${{ steps.t.outputs.api }} # apps/web/src/lib/api.ts가 읽는 이름
+          VITE_SHOW_API_STATUS: ${{ steps.t.outputs.show_status }}
+
+      - name: Web - deploy Pages
+        working-directory: apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: >-
+          pnpm exec wrangler pages deploy ../web/dist
+          --project-name hashbox-web
+          --branch ${{ steps.t.outputs.branch }}
+          --commit-hash ${{ github.event.workflow_run.head_sha }}
