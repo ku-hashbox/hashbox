@@ -245,8 +245,16 @@ export async function openShare(env: Env, id: string, authToken?: string): Promi
 
   let authHash: string | null = null;
   if (row.has_password === 1) {
-    authHash = authToken ? await sha256b64url(authToken) : null;
-    if (!authHash || !row.auth_hash || !safeEqual(authHash, row.auth_hash)) {
+    // 검증 정보가 없는 요청은 비밀번호 대입으로 세지 않는다.
+    if (authToken === undefined) {
+      return {
+        ok: false,
+        reason: 'WRONG_PASSWORD',
+        attemptsLeft: MAX_PASSWORD_ATTEMPTS - row.failed_attempts,
+      };
+    }
+    authHash = await sha256b64url(authToken);
+    if (!row.auth_hash || !safeEqual(authHash, row.auth_hash)) {
       const attempt = await env.DB.prepare(ADD_FAILED_ATTEMPT)
         .bind(id, MAX_PASSWORD_ATTEMPTS, Date.now())
         .first<Pick<ShareRow, 'status' | 'failed_attempts'>>();
