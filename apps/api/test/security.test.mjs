@@ -210,14 +210,15 @@ test('[10-3] 비밀번호 없이·틀린 비밀번호로는 횟수가 줄지 않
     password: '맞는비번-correct',
   });
 
-  // 링크만 가진 사람: authToken 없이 open
+  // 링크만 가진 사람: authToken 없이 open해도 실패 횟수는 소모하지 않는다.
   const noPw = await openRaw(s.id);
   assert.equal(noPw.status, 401);
-  assert.equal((await noPw.json()).error.attemptsLeft, 4);
+  assert.equal((await noPw.json()).error.attemptsLeft, 5);
+  assert.equal((await row(s.id)).failed_attempts, 0);
   assert.equal((await row(s.id)).views_left, 1);
 
-  // 틀린 비밀번호 3번 (실제 PBKDF2로 계산한 authToken)
-  for (const left of [3, 2, 1]) {
+  // 틀린 비밀번호 4번 (실제 PBKDF2로 계산한 authToken)
+  for (const left of [4, 3, 2, 1]) {
     const r = await receive(s.id, s.linkKey, 'wrong-' + left);
     assert.equal(r.status, 401);
     assert.equal(r.body.error.attemptsLeft, left);

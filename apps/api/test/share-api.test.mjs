@@ -257,20 +257,40 @@ test('password metadata exposes KDF parameters; valid proof opens the share', as
   assert.equal((await open(share, authToken)).status, 200);
 });
 
-test('missing and wrong passwords do not charge views; concurrent failures lock at exactly five', async () => {
+test('missing password proofs never spend attempts and a valid proof can still open', async () => {
   const authToken = token();
   const share = await newShare({
     password: { authToken, salt: token(16), iter: PBKDF2_ITERATIONS },
   });
   assert.equal((await upload(share)).status, 204);
+  for (let i = 0; i < 6; i++) {
+    await error(await open(share), 401, 'WRONG_PASSWORD', 5);
+  }
+  const ready = await row(share.id);
+  assert.equal(ready.status, 'ready');
+  assert.equal(ready.failed_attempts, 0);
+  assert.equal(ready.views_left, 1);
+  assert.ok(await bucket.head('blobs/' + share.id));
+
+  await error(await open(share, token()), 401, 'WRONG_PASSWORD', 4);
   await error(await open(share), 401, 'WRONG_PASSWORD', 4);
+  assert.equal((await row(share.id)).failed_attempts, 1);
+  assert.equal((await open(share, authToken)).status, 200);
+});
+
+test('wrong passwords do not charge views; concurrent failures lock at exactly five', async () => {
+  const authToken = token();
+  const share = await newShare({
+    password: { authToken, salt: token(16), iter: PBKDF2_ITERATIONS },
+  });
+  assert.equal((await upload(share)).status, 204);
   const responses = await Promise.all(Array.from({ length: 8 }, () => open(share, token())));
   const attemptsLeft = [];
   for (const response of responses) {
     if (response.status === 401) attemptsLeft.push((await response.json()).error.attemptsLeft);
     else await error(response, 410, 'LOCKED');
   }
-  assert.deepEqual(attemptsLeft.sort(), [1, 2, 3]);
+  assert.deepEqual(attemptsLeft.sort(), [1, 2, 3, 4]);
   const locked = await row(share.id);
   assert.equal(locked.status, 'locked');
   assert.equal(locked.failed_attempts, 5);
