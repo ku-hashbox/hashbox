@@ -35,6 +35,15 @@ pnpm dev:web
 
 로컬 개발은 Cloudflare 계정 없이 동작한다 (D1·R2를 로컬에서 흉내 냄).
 
+Windows에서 Wrangler 실행 시 `listen EFAULT` 또는 `os error 10014`가 나오면 아래 명령으로
+실행한다. 웹은 `http://localhost:5173`에서 연다.
+
+```bash
+pnpm --filter @hashbox/api exec wrangler dev --local --ip localhost --inspector-port 0
+```
+
+[Windows 로컬 실행 확인 화면](docs/screenshots/local-setup-windows.png)
+
 ## 규칙
 
 - 브랜치: `main`(배포) ← `dev`(통합) ← `feat/기능명`, `fix/내용`
